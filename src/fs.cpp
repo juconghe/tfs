@@ -5,6 +5,22 @@ using namespace std;
 myFileSystem::myFileSystem(char diskName[16]) {
   // open the file with the above name
   // this file will act as the "disk" for your file system
+  disk.open(diskName, std::fstream::in | std::fstream::out |std::fstream::binary);
+}
+
+bool haveSufficientBlock(char *freeList,int size) {
+  int block_needed = size/block_size;
+  int counter = 0;
+  for (int i = 0; i < 128; i++) {
+    if (freeList[i] == 0) {
+      counter += 1;
+    }
+  }
+  if (counter >= block_needed) {
+    return true;
+  } else {
+    return false;
+  }
 }
 
 int myFileSystem::create_file(char name[8], int size) {
@@ -39,6 +55,53 @@ int myFileSystem::create_file(char name[8], int size) {
   // Write out the 128 byte free block list
   // Move the file pointer to the position on disk where this inode was stored
   // Write out the inode
+  if (disk.is_open()) {
+    fseek(&disk,0,SEEK_SET);
+    char *freeList = new char[128];
+    disk.read(freeList,128);
+    idxNode *inode;
+    if (haveSufficientBlock(freeList,size)) {
+      // skip to inode start position
+      fseek(&disk,128, SEEK_SET);
+      int inode_index = 0;
+      // look for free inode
+      while (inode_index < 16) {
+        inode = new idxNode();
+        fseek(&disk, sizeof(idxNode)*inode_index, SEEK_CUR);
+        disk.read(inode,sizeof(idxNode));
+        if ((inode->used) == 0) {
+          inode->name = name;
+          inode->used = 1;
+          inode->size = size/block_size;
+          break;
+        }
+        inode = NULL;
+      }
+      // find avaliable free list
+      fseek(&disk,0,SEEK_SET);
+      int size = size/block_size;
+      int blockPointer = new int[8];
+      int blockPointer_index = 0;
+      for (int i = 0; i < 128; i++) {
+        if (size > 0) {
+          if(freeList[i] == 0) {
+            fseek(&disk,i,SEEK_SET);
+            disk.write(1);
+            blockPointer[blockPointer_index] = i;
+            size -= 1;
+          }
+        } else {
+          break;
+        }
+      }
+      inode->blockPointers = blockPointer;
+      fseek(&disk,0,SEEK_SET);
+      disk.fseek(128+sizeof(idxNode)*inode_index);
+      disk.write(*inode);
+      fseek(&disk, 0, SEEK_SET);
+      return 1;
+    }
+  }
   return 0;
 } // End Create
 
@@ -68,7 +131,39 @@ int myFileSystem::delete_file(char name[8]){
   // Write out the 128 byte free block list
   // Move the file pointer to the position on disk where this inode was stored
   // Write out the inode
-  return 0;
+  fseek(&disk,128, SEEK_SET);
+  int inode_index = 0;
+  idxNode *inode;
+  int blockPointer[8];
+  // look inode
+  while (inode_index < 16) {
+    inode = new idxNode();
+    fseek(&disk, sizeof(idxNode)*inode_index, SEEK_CUR);
+    disk.read(inode,sizeof(idxNode));
+    if ((inode->used) == 1) {
+      if (strcmp(inode->name,name)) {
+        blockPointer = inode->blockPointers;
+      }
+      break;
+    }
+    inode = NULL;
+  }
+  if (inode == NULL) {
+    return -1;
+  }else {
+    // set the free list back to free
+    for (int i = 0; i < 8; i++) {
+      if (blockPointer[i] != 0 ) {
+        fseek(&disk,i, SEEK_SET);
+        disk.write(0);
+      }
+    }
+    inode->used = 0;
+    disk.fseek(128+sizeof(idxNode)*inode_index);
+    disk.write(*inode);
+    fseek(&disk, 0, SEEK_SET);
+    return 1;
+  }
 } // End Delete
 
 
