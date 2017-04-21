@@ -11,10 +11,10 @@ using namespace std;
 class FSTest : public ::testing::Test {
 protected:
   FSTest() {
-    system("rm -f disk0");
-    system("rm -f disk1");
-    system("./create_fs disk0");
-    system("./create_fs disk1");
+    // system("rm -f disk0");
+    // system("rm -f disk1");
+    // system("./create_fs disk0");
+    // system("./create_fs disk1");
   }
 };
 
