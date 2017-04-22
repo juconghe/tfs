@@ -9,15 +9,14 @@ myFileSystem::myFileSystem(char diskName[16]) {
 }
 
 bool haveSufficientBlock(char *freeList,int size) {
-  int block_needed = size;
   int counter = 0;
   for (int i = 0; i < 128; i++) {
     if (freeList[i] == 0) {
       counter += 1;
     }
   }
-  std::cout << "couter is " << counter << '\n';
-  if (counter > block_needed) {
+  std::cout << "Opening spot in free is " << counter << " needed " << size <<'\n';
+  if (counter > size) {
     return true;
   } else {
     return false;
@@ -125,7 +124,8 @@ int myFileSystem::create_file(char name[8], int size) {
       return 1;
     }
   }
-  return -1;
+  std::cout << "cant create file" << '\n';
+  return 0;
 } // End Create
 
 int myFileSystem::delete_file(char name[8]){
@@ -183,12 +183,12 @@ int myFileSystem::delete_file(char name[8]){
     return -1;
   }else {
     // set the free list back to free
-    for (int i = 0; i < 8; i++) {
-      std::cout << blockPointer[i] << '\n';
-    }
+    // for (int i = 0; i < 8; i++) {
+    //   std::cout << blockPointer[i] << '\n';
+    // }
     for (int i = 0; i < 8; i++) {
       if (blockPointer[i] != 0 ) {
-        std::cout << "block been use is " << blockPointer[i]  << '\n';
+        // std::cout << "block been use is " << blockPointer[i]  << '\n';
         freeList[blockPointer[i]] = 0;
       }
     }
@@ -210,8 +210,20 @@ int myFileSystem::ls(){
   // If the inode is in-use
   // print the "name" and "size" fields from the inode
   // end for
-    return 0;
-}; // End ls
+  idxNode *inode;
+  for (int i = 0; i < 16; i++) {
+    inode = new idxNode();
+    char* temp = new char[sizeof(idxNode)];
+    disk.seekg(128+sizeof(idxNode)*i,disk.beg);
+    disk.read(temp,sizeof(idxNode));
+    memcpy(inode, temp, sizeof(idxNode));
+    if (inode->used == 1) {
+      std::cout << "name " << inode->name << '\n';
+      std::cout << "size " << inode->size << '\n';
+    }
+  }
+  return 1;
+} // End ls
 
 int myFileSystem::read(char name[8], int blockNum, char buf[1024]){
   // read this block from this file
@@ -231,7 +243,30 @@ int myFileSystem::read(char name[8], int blockNum, char buf[1024]){
 
   // Read in the block => Read in 1024 bytes from this location
   //   into the buffer "buf"
-  return 0;
+
+  idxNode *inode;
+  int* blockPointer = new int[8];
+  for (int i = 0; i < 16; i++) {
+    inode = new idxNode();
+    char* temp = new char[sizeof(idxNode)];
+    disk.seekg(128+sizeof(idxNode)*i,disk.beg);
+    disk.read(temp,sizeof(idxNode));
+    memcpy(inode, temp, sizeof(idxNode));
+    if ((inode->used == 1) && (strcmp(inode->name,name) == 0)) {
+      memcpy(blockPointer, inode->blockPointers, sizeof(int)*8);
+      break;
+    }
+    temp = NULL;
+    inode = NULL;
+  }
+  if (inode == NULL || inode->size < blockNum) {
+    return -1;
+  } else {
+      disk.seekg((inode->blockPointers)[blockNum]*block_size,disk.beg);
+      disk.read(buf, 1024);
+      // std::cout << buf << '\n';
+      return 1;
+  }
 } // End read
 
 
@@ -252,9 +287,32 @@ int myFileSystem::write(char name[8], int blockNum, char buf[1024]){
 
   // Write the block! => Write 1024 bytes from the buffer "buff" to
   //   this location
-  return 0;
+  idxNode *inode;
+  int* blockPointer = new int[8];
+  for (int i = 0; i < 16; i++) {
+    inode = new idxNode();
+    char* temp = new char[sizeof(idxNode)];
+    disk.seekg(128+sizeof(idxNode)*i,disk.beg);
+    disk.read(temp,sizeof(idxNode));
+    memcpy(inode, temp, sizeof(idxNode));
+    if ((inode->used == 1) && (strcmp(inode->name,name) == 0)) {
+      memcpy(blockPointer, inode->blockPointers, sizeof(int)*8);
+      break;
+    }
+    temp = NULL;
+    inode = NULL;
+  }
+  if (inode == NULL || inode->size < blockNum) {
+    return -1;
+  } else {
+      disk.seekg((inode->blockPointers)[blockNum]*block_size,disk.beg);
+      // std::cout << buf << '\n';
+      disk.write(buf, 1024);
+      return 1;
+  }
 } // end write
 
 int myFileSystem::close_disk(){
-    return 0;
+    disk.close();
+    return 1;
 }
