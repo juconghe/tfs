@@ -5,11 +5,11 @@ using namespace std;
 myFileSystem::myFileSystem(char diskName[16]) {
   // open the file with the above name
   // this file will act as the "disk" for your file system
-  disk.open(diskName, std::fstream::in | std::fstream::out);
+  disk.open(diskName, std::fstream::in | std::fstream::out | std::fstream::binary);
 }
 
 bool haveSufficientBlock(char *freeList,int size) {
-  int block_needed = size/block_size;
+  int block_needed = (size<block_size) ? 1:(size/block_size);
   int counter = 0;
   for (int i = 0; i < 128; i++) {
     if (freeList[i] == 0) {
@@ -67,14 +67,20 @@ int myFileSystem::create_file(char name[8], int size) {
   // Write out the 128 byte free block list
   // Move the file pointer to the position on disk where this inode was stored
   // Write out the inode
-  char *freeList = new char[128];
-  disk.seekg(0,disk.beg);
+  char* freeList = new char[128];
+  disk.seekg(0);
   disk.read(freeList,128);
-  std::cout << "freeList" << freeList << '\n';
+  for (int i = 0; i < 128; i++) {
+    if (freeList[i] == 0) {
+      std::cout << "0" << '\n';
+    } else {
+      std::cout << "1" << '\n';
+    }
+  }
   idxNode *inode;
   if (haveSufficientBlock(freeList,size)) {
     // skip to inode start position
-    disk.seekg(128,disk.beg);
+    disk.seekg(128);
     std::cout << "Sufficent works" << '\n';
     int inode_index = 0;
     // look for free inode
@@ -82,7 +88,7 @@ int myFileSystem::create_file(char name[8], int size) {
       inode = new idxNode();
       char *temp = new char[sizeof(idxNode)];
       std::cout << "=======>" << temp << '\n';
-      disk.seekg(sizeof(idxNode)*inode_index,disk.cur);
+      disk.seekg(sizeof(idxNode)*inode_index);
       disk.read(temp,sizeof(idxNode));
       std::cout << "inode byte ======>" <<temp << '\n';
       memcpy(inode, temp, sizeof(idxNode));
@@ -96,9 +102,9 @@ int myFileSystem::create_file(char name[8], int size) {
       inode = NULL;
     }
     std::cout << inode->size << '\n';
-    disk.seekg(0,disk.beg);
+    disk.seekg(0);
     // find avaliable free list
-    char* tempPointers = new char[8];
+    int* tempPointers = new int[8];
     int blockPointer_index = 0;
     for (int i = 0; i < 128; i++) {
       if (blockPointer_index < inode->size) {
